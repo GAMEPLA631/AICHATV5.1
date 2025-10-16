@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatSlovak AI Copilot V5.1 Model</title>
+    <!-- Načítanie Tailwind CSS pre moderný dizajn -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Svetlo šedé pozadie */
+        }
+        .chat-container {
+            max-width: 900px;
+            height: 95vh;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            border-radius: 1.5rem; /* Zaoblené rohy celého kontajnera */
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+        .chat-messages {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+            background-color: #ffffff;
+            /* Vylepšený scrollbar pre moderný vzhľad */
+            scrollbar-width: thin;
+            scrollbar-color: #9ca3af #f3f4f6;
+        }
+        .chat-messages::-webkit-scrollbar {
+            width: 8px;
+        }
+        .chat-messages::-webkit-scrollbar-track {
+            background: #f3f4f6;
+        }
+        .chat-messages::-webkit-scrollbar-thumb {
+            background-color: #9ca3af;
+            border-radius: 20px;
+            border: 2px solid #ffffff;
+        }
+        .user-message {
+            background-color: #3b82f6; /* Modrá farba pre užívateľa */
+            color: white;
+            border-bottom-right-radius: 0;
+        }
+        .ai-message {
+            background-color: #e5e7eb; /* Svetlo šedá pre AI */
+            color: #1f2937;
+            border-bottom-left-radius: 0;
+        }
+        .message-bubble {
+            padding: 0.75rem 1.25rem;
+            margin-bottom: 1rem;
+            max-width: 80%;
+            border-radius: 1.25rem;
+            word-wrap: break-word;
+        }
+        .code-block {
+            background-color: #1f2937;
+            color: #d1d5db;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            overflow-x: auto;
+            position: relative;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+        }
+        /* Responzívne úpravy pre mobilné zariadenia */
+        @media (max-width: 768px) {
+            .chat-container {
+                height: 100vh;
+                border-radius: 0;
+            }
+            .chat-input-area {
+                padding: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="chat-container">
+        <!-- Hlavička -->
+        <header class="bg-gray-800 p-4 text-white shadow-lg rounded-t-2xl md:rounded-t-3xl">
+            <h1 class="text-xl md:text-2xl font-bold tracking-tight">ChatSlovak AI Copilot V5.1 Model</h1>
+            <p class="text-sm text-gray-400">Špecialista na generovanie jedno-súborových webových aplikácií (HTML/CSS/JS).</p>
+        </header>
+
+        <!-- Chatovacie správy -->
+        <div id="messages" class="chat-messages">
+            <div class="flex justify-start">
+                <div class="message-bubble ai-message">
+                    Dobrý deň! Som ChatSlovak AI Copilot V5.1 Model. Čo pre vás dnes môžem vytvoriť? Skúste mi zadať: "Vytvor jednoduchú HTML kalkulačku s modrým dizajnom."
+                </div>
+            </div>
+        </div>
+
+        <!-- Vstupná oblasť -->
+        <div class="p-4 bg-gray-100 border-t border-gray-200 shadow-inner rounded-b-2xl md:rounded-b-3xl chat-input-area">
+            <div class="flex space-x-3">
+                <input type="text" id="userInput" placeholder="Zadajte svoju požiadavku (napr. 'Vytvor časovač na pomodoro')..."
+                       class="flex-grow p-3 border border-gray-300 rounded-xl focus:ring-4 focus:ring-blue-500/50 focus:border-blue-500 transition duration-200">
+                <button id="sendBtn" onclick="sendMessage()"
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl transition duration-200 ease-in-out shadow-lg shadow-blue-500/50 flex items-center justify-center disabled:opacity-50">
+                    Odoslať
+                    <!-- Ikonka šípky (inline SVG) -->
+                    <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Globálne premenné (MUSIA byť definované pre fungovanie v Canvas prostredí)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const apiKey = "AIzaSyDdiCiIfr2gLtsRMENBkWG1hJo6N1uij7w" // API kľúč pre volanie Gemini API
+
+        const messagesContainer = document.getElementById('messages');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+        // Funkcia na pridanie správy do chatu
+        function addMessage(text, sender) {
+            const isAI = sender === 'AI';
+            const alignmentClass = isAI ? 'justify-start' : 'justify-end';
+            const bubbleClass = isAI ? 'ai-message' : 'user-message';
+
+            const messageHtml = `
+                <div class="flex ${alignmentClass}">
+                    <div class="message-bubble ${bubbleClass}">
+                        ${text}
+                    </div>
+                </div>
+            `;
+            messagesContainer.insertAdjacentHTML('beforeend', messageHtml);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight; // Scroll na koniec
+        }
+
+        // Funkcia na generovanie unikátneho ID (pre loader)
+        const loaderId = 'loader-' + Date.now();
+
+        // Funkcia pre odoslanie správy
+        window.sendMessage = async function() {
+            const userText = userInput.value.trim();
+            if (!userText) return;
+
+            // 1. Zobrazíme správu používateľa
+            addMessage(userText, 'User');
+            userInput.value = '';
+            sendBtn.disabled = true;
+
+            // 2. Zobrazíme loading/ďakovnú správu (podľa požiadavky: "Thanking...")
+            const loadingHtml = `
+                <div class="flex justify-start" id="${loaderId}">
+                    <div class="message-bubble ai-message flex items-center space-x-3">
+                        <svg class="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span class="text-sm font-semibold">Ďakujeme za trpezlivosť... Model "V5.1" Generuje riešenie (kompletnú web app).</span>
+                    </div>
+                </div>
+            `;
+            messagesContainer.insertAdjacentHTML('beforeend', loadingHtml);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+            try {
+                // Systémová inštrukcia pre AI: Generovať len HTML kód
+                const systemPrompt = "Si ChatSlovak AI Copilot V5.1 Model. Tvoja úloha je generovať len a výhradne kompletný a funkčný jedno-súborový HTML kód (vrátane CSS v <style> a JS v <script> tagoch) pre webovú aplikáciu, ktorú používateľ požaduje. Kód musí byť moderný, responzívny a estetický (použi Tailwind CSS). Neuvádzaj žiadny vysvetľujúci text, len čistý kód. Dôrazne generuj iba obsah, ktorý je vo vnútri <html> tagov (vrátane <html> tagu).";
+                
+                // Konfigurácia pre štruktúrovanú odpoveď (aj keď budeme brať len text)
+                const payload = {
+                    contents: [{ parts: [{ text: userText }] }],
+                    systemInstruction: {
+                        parts: [{ text: systemPrompt }]
+                    },
+                };
+                
+                // Volať API s exponenciálnym backoff
+                let response = null;
+                let retries = 0;
+                const maxRetries = 3;
+
+                while (retries < maxRetries) {
+                    try {
+                        response = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (response.ok) {
+                            break; // Úspech
+                        } else {
+                            // Pre chyby 4xx/5xx môžeme skúsiť znova (alebo len pre 5xx)
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                    } catch (error) {
+                        retries++;
+                        if (retries >= maxRetries) {
+                            throw error;
+                        }
+                        const delay = Math.pow(2, retries) * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
+
+                if (!response.ok) {
+                    throw new Error("Generovanie kódu zlyhalo po opakovaných pokusoch.");
+                }
+
+                const result = await response.json();
+                const aiText = result.candidates?.[0]?.content?.parts?.[0]?.text || "Nastala chyba pri získavaní odpovede.";
+                
+                // 3. Odstránime loading správu
+                document.getElementById(loaderId)?.remove();
+
+                // 4. Zobrazíme vygenerovaný kód
+                displayCodeBlock(aiText);
+
+            } catch (error) {
+                console.error("Chyba volania Gemini API:", error);
+                document.getElementById(loaderId)?.remove();
+                addMessage("Prepáčte, nastala chyba pri komunikácii s modelom. Skúste to prosím znova.", 'AI');
+            } finally {
+                sendBtn.disabled = false;
+            }
+        };
+
+        // Funkcia na zobrazenie bloku kódu
+        function displayCodeBlock(code) {
+            // Predbežné spracovanie kódu: Ak model vráti Markdown kódové bloky, odstráň ich
+            const cleanedCode = code.replace(/```html\n?|```/g, '').trim();
+
+            const blockHtml = `
+                <div class="flex justify-start">
+                    <div class="message-bubble ai-message w-full md:w-5/6">
+                        <p class="text-sm font-semibold mb-3">✅ Hotovo! Tu je Váš jedno-súborový kód webovej aplikácie:</p>
+                        <div class="code-block">
+                            <pre><code id="generatedCode">${escapeHtml(cleanedCode)}</code></pre>
+                            <button onclick="copyCode(this)" class="copy-btn bg-gray-600 hover:bg-gray-500 text-white rounded-md transition duration-150">Kopírovať</button>
+                        </div>
+                        <p class="text-xs mt-3 text-gray-500">Skopírujte kód a vložte ho do súboru .html pre spustenie.</p>
+                    </div>
+                </div>
+            `;
+            messagesContainer.insertAdjacentHTML('beforeend', blockHtml);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        // Funkcia pre escape HTML špeciálnych znakov
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, (m) => map[m]);
+        }
+
+        // Funkcia pre kopírovanie kódu
+        window.copyCode = function(button) {
+            const codeElement = button.previousElementSibling.querySelector('#generatedCode');
+            const codeToCopy = codeElement.textContent;
+
+            // Použijeme execCommand pre lepšiu kompatibilitu v iFrame
+            const textarea = document.createElement('textarea');
+            textarea.value = codeToCopy;
+            document.body.appendChild(textarea);
+            textarea.select();
+
+            try {
+                const successful = document.execCommand('copy');
+                button.textContent = successful ? 'Skopírované!' : 'Chyba!';
+            } catch (err) {
+                console.error('Kopírovanie zlyhalo', err);
+                button.textContent = 'Chyba!';
+            }
+
+            document.body.removeChild(textarea);
+
+            // Reset tlačidla po 2 sekundách
+            setTimeout(() => {
+                button.textContent = 'Kopírovať';
+            }, 2000);
+        };
+
+        // Povolenie odoslania pomocou klávesy Enter
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !sendBtn.disabled) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Nastavenie logovania pre Firestore (pre debug, aj keď tu Firestore nepoužívame)
+        if (typeof setLogLevel !== 'undefined') {
+            // setLogLevel('Debug'); // Odkomentujte pre detailné logovanie
+        }
+    </script>
+</body>
+</html>
